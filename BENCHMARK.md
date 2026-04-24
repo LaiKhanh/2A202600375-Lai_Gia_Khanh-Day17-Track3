@@ -15,11 +15,28 @@ conversations.
 | Semantic | FAISS / keyword TF-IDF fallback | Document / FAQ retrieval |
 
 ### Test Groups
-- **profile_recall** – verify the agent remembers stated personal facts
-- **conflict_update** – verify newer facts overwrite older contradicting ones
-- **episodic_recall** – verify past tasks/lessons are retrieved correctly
-- **semantic_retrieval** – verify relevant document chunks are surfaced
-- **trim_token_budget** – verify context window stays within budget
+- **Profile Recall**
+  - Scenarios: #1, #6, #7, #10
+  - Agent successfully remembers user attributes (name, age, preferences) across multiple turns.
+
+- **Conflict Update**
+  - Scenario: #2
+  - Demonstrates overwrite logic:
+    - Old fact: allergy = sữa bò
+    - New fact: allergy = đậu nành
+    - Final memory correctly reflects latest user correction.
+
+- **Episodic Recall**
+  - Scenarios: #3, #9
+  - Agent retrieves past experiences/tasks stored in episodic memory.
+
+- **Semantic Retrieval**
+  - Scenarios: #4, #8
+  - Agent retrieves relevant knowledge chunks from vector/keyword search.
+
+- **Token Budget / Context Trimming**
+  - Scenario: #5
+  - Confirms that context is trimmed and managed within token limits.
 
 ## Results
 
@@ -37,4 +54,84 @@ conversations.
 | 8 | Retrieve 2FA setup guide from knowledge base | semantic_retrieval | Xin lỗi, tôi không tìm thấy tài liệu liên quan. | Tôi tìm được: Cài đặt 2FA: Settings → Security → Two-Factor  | ✅ |
 | 9 | Recall completed ML project from episodic memory | episodic_recall | Xin lỗi, tôi không có thông tin về kinh nghiệm của bạn. | Bài học gần nhất: Tôi vừa hoàn thành dự án phân loại ảnh với | ✅ |
 | 10 | Combined: profile recall + episodic + semantic retrieval | profile_recall | Xin lỗi, tôi không biết tên của bạn. | Tên của bạn là hoa. | ✅ |
-**Results: 10/10 passed (100%)**
+
+
+## Reflection: Privacy & Limitations
+
+### 1. Which memory helps the agent the most?
+
+- **Long-term profile memory** provides the most consistent improvement.
+- It enables personalization (name, preferences, constraints) across conversations.
+- Without it, the agent behaves stateless and generic.
+
+### 2. Which memory is most risky?
+
+- **Long-term profile memory is the most sensitive**, as it may contain:
+  - Personal identifiable information (PII)
+  - Preferences, habits, or private user data
+
+- If incorrectly retrieved or leaked, it can cause:
+  - Privacy violations
+  - Incorrect personalization
+  - Loss of user trust
+
+### 3. Privacy Risks (PII)
+
+Potential risks include:
+
+- Storing sensitive user data without consent
+- Retrieving outdated or incorrect personal facts
+- Exposing private data in unrelated contexts
+
+### 4. Mitigation Strategies
+
+To reduce risks, the system should include:
+
+- **TTL (Time-to-Live)** for profile and episodic memory
+- **User-controlled deletion**
+  - Example: delete profile, clear history
+- **Consent mechanism**
+  - Ask user before storing sensitive information
+- **Scoped retrieval**
+  - Only retrieve relevant memory for the current query
+
+### 5. Memory Deletion
+
+If a user requests deletion:
+
+- **Short-term memory** → clear buffer
+- **Long-term profile** → delete from KV store / Redis
+- **Episodic memory** → remove entries from log
+- **Semantic memory** → remove embeddings / documents
+
+Deletion must be consistent across all backends.
+
+### 6. Risks of Incorrect Retrieval
+
+- Retrieving wrong semantic chunk → hallucinated answer
+- Using outdated profile → incorrect personalization
+- Mixing unrelated episodic events → confusion
+
+### 7. Technical Limitations
+
+Current system limitations include:
+
+- **Heuristic routing**
+  - Intent classification is rule-based → may misroute queries
+- **No embedding update strategy**
+  - Semantic memory may become stale over time
+- **Token budget is approximate**
+  - Uses word/character count instead of exact tokenizer
+- **Scalability**
+  - Memory growth (episodic logs, vector DB) may degrade performance
+- **No ranking/reranking**
+  - Semantic retrieval may return suboptimal results
+
+### 8. Failure at Scale
+
+The system may fail when:
+
+- Too many users → memory storage explosion
+- Too many episodes → slow retrieval
+- Large vector DB → latency increases
+- Poor memory filtering → noisy context → worse LLM output
